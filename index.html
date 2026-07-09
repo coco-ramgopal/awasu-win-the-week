@@ -196,12 +196,12 @@
   </div>
   <div id="gate" style="display:none"><div class="box">
     <div class="brand"><div class="mark"></div><h1>Win the <span>Week</span></h1></div>
-    <p style="color:var(--muted);font-size:13px;margin:0 0 18px">Team sign-in &mdash; use your <b>@awasudesign.com</b> email and we'll send a one-click link.</p>
-    <form id="gate-form" style="display:flex;flex-direction:column;gap:10px">
-      <input id="gate-email" type="email" required placeholder="you@awasudesign.com" autocomplete="email">
-      <button id="gate-btn" type="submit">Send magic link</button>
-    </form>
-    <p id="gate-msg" style="color:var(--muted);font-size:12px;margin:14px 0 0;min-height:1em"></p>
+    <p style="color:var(--muted);font-size:13px;margin:0 0 18px">Team sign-in &mdash; continue with your <b>@awasudesign.com</b> Google account.</p>
+    <button id="gate-google" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:8px;font-weight:600;">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 9 0 9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
+      Continue with Google
+    </button>
+    <p id="gate-msg" style="color:var(--muted);font-size:12px;margin:14px 0 0;min-height:1em">Only @awasudesign.com accounts can sign in.</p>
   </div></div>
   <div id="toast"></div>
 
@@ -503,15 +503,27 @@ const gate=document.getElementById("gate"), signout=document.getElementById("sig
 signout.addEventListener("click",async()=>{ await sb.auth.signOut(); location.reload(); });
 function showGate(){ document.getElementById("loading").style.display="none"; document.getElementById("board").innerHTML=""; gate.style.display="flex"; }
 function enter(){ gate.style.display="none"; signout.style.display=""; load(); }
-document.getElementById("gate-form").addEventListener("submit",async e=>{
-  e.preventDefault(); const email=document.getElementById("gate-email").value.trim();
-  const btn=document.getElementById("gate-btn"); btn.disabled=true; btn.textContent="Sending…";
-  const { error }=await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: location.origin+location.pathname } });
-  btn.disabled=false; btn.textContent="Send magic link";
-  document.getElementById("gate-msg").textContent = error ? ("Error: "+error.message) : ("Check "+email+" for a sign-in link.");
+document.getElementById("gate-google").addEventListener("click",async()=>{
+  const msg=document.getElementById("gate-msg");
+  msg.textContent="Redirecting to Google…";
+  const { error }=await sb.auth.signInWithOAuth({ provider:"google", options:{
+    redirectTo: location.origin+location.pathname,
+    queryParams:{ hd:"awasudesign.com", prompt:"select_account" } } });
+  if(error) msg.textContent="Sign-in error: "+error.message;
 });
-sb.auth.onAuthStateChange((_e,session)=>{ if(session) enter(); });
-(async()=>{ const { data:{ session } }=await sb.auth.getSession(); if(session) enter(); else showGate(); })();
+async function gateSession(session){
+  if(!session){ showGate(); return; }
+  const email=(session.user&&session.user.email||"").toLowerCase();
+  if(!email.endsWith("@awasudesign.com")){
+    await sb.auth.signOut();
+    showGate();
+    document.getElementById("gate-msg").textContent="That account isn't @awasudesign.com — use your Awasu Google account.";
+    return;
+  }
+  enter();
+}
+sb.auth.onAuthStateChange((_e,session)=>{ gateSession(session); });
+(async()=>{ const { data:{ session } }=await sb.auth.getSession(); gateSession(session); })();
 </script>
 </body>
 </html>
