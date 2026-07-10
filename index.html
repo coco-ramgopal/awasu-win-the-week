@@ -234,7 +234,7 @@ const sb = createClient(SUPA_URL, SUPA_KEY);
 const KINDS=[["ontrack","On track"],["scoping","Active · scoping"],["active","Active · light"],
   ["inactive","Inactive"],["stale","Stale"],["dormant","Dormant"],["deferred","Unmapped / low-touch"],["bd","BD"]];
 // left-edge stripe groups cards by contract (one systematic dimension of color)
-const CONTRACT_COLORS={"Certos":"#C77D3A","Paze Marketing":"#3E6FB0","Paze Sales":"#5AA0A0","EWS Corp":"#7E63B8","Zelle":"#4C9E7A","Deksia":"#9A8B6A"};
+const CONTRACT_COLORS={"Certos":"#C77D3A","Paze Marketing":"#3E6FB0","Paze Sales":"#5AA0A0","EWS Corp":"#4C9E7A","Zelle":"#7E63B8","Deksia":"#9A8B6A"};
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
 
 let projects=[], todosByProj={}, curFilter=()=>true;
