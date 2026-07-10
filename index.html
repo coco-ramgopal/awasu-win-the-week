@@ -211,9 +211,9 @@
       Everything's editable and saves live. Flags: one per line, prefixed <b>[crit]</b> / <b>[warn]</b> / <b>[info]</b>.</p>
   </div>
   <div class="wrap" id="view-history" style="display:none">
-    <div class="hist-head"><h2>Board history</h2><button class="snap-btn" id="snap-now">&#128247; Snapshot now</button></div>
-    <p class="hist-note">A snapshot of the whole board is saved automatically before every weekly refresh.
-      Take one manually to freeze a moment &mdash; e.g. right after a meeting. Each tab below is one snapshot.</p>
+    <div class="hist-head"><h2>Weekly history</h2><button class="snap-btn" id="snap-now">&#128204; Finalize this week</button></div>
+    <p class="hist-note">The finalized board from each <b>Win the Week</b> — saved after the group has reviewed the draft and made its edits.
+      Each tab is one completed week. Hit <b>Finalize this week</b> at the end of the meeting to lock it in.</p>
     <div class="sheet-tabs" id="hist-tabs"><span style="color:var(--muted);font-size:13px;padding:6px 0">Loading history&hellip;</span></div>
     <div id="hist-board"></div>
   </div>
@@ -480,9 +480,9 @@ tabsEl.addEventListener("click",e=>{
 
 async function loadHistory(){
   const tabs=document.getElementById("hist-tabs");
-  const {data,error}=await sb.from("board_history").select("id,taken_at,label").order("taken_at",{ascending:false});
+  const {data,error}=await sb.from("board_history").select("id,taken_at,label").eq("kind","finalized").order("taken_at",{ascending:false});
   if(error){ tabs.innerHTML='<span style="color:var(--crit);font-size:13px;padding:6px 0">Couldn&rsquo;t load history: '+esc(error.message)+'</span>'; return; }
-  if(!data||!data.length){ tabs.innerHTML='<span style="color:var(--muted);font-size:13px;padding:6px 0">No snapshots yet.</span>';
+  if(!data||!data.length){ tabs.innerHTML='<span style="color:var(--muted);font-size:13px;padding:6px 0">No finalized weeks yet — hit &ldquo;Finalize this week&rdquo; at the end of your next Win the Week.</span>';
     document.getElementById("hist-board").innerHTML=""; return; }
   tabs.innerHTML="";
   data.forEach((h,i)=>{
@@ -545,12 +545,12 @@ async function openSnapshot(id,btn){
 }
 
 document.getElementById("snap-now").addEventListener("click",async()=>{
-  const label=prompt("Label this snapshot (e.g. “after Jul 8 meeting”):",
-    "after meeting "+new Date().toLocaleDateString());
+  if(!confirm("Finalize this week? This saves the board as it stands now as the permanent record for this Win the Week.")) return;
+  const label=prompt("Name this finalized week:", "Win the Week — "+new Date().toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}));
   if(label===null) return;
-  const {data,error}=await sb.rpc("snapshot_board",{snap_label:label});
-  if(error) flash("Snapshot failed: "+error.message,true);
-  else { flash("Snapshot saved — "+data.projects+" projects, "+data.todos+" tasks"); loadHistory(); }
+  const {data,error}=await sb.rpc("snapshot_board",{snap_label:label, snap_kind:"finalized"});
+  if(error) flash("Finalize failed: "+error.message,true);
+  else { flash("Week finalized — saved to History"); loadHistory(); }
 });
 
 // ---------- auth gate (team login, @awasudesign.com only via RLS) ----------
