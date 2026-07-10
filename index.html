@@ -102,6 +102,17 @@
   .blist.auto li::before{background:var(--info);opacity:.85;}
   .todo.auto .tbody{color:var(--info);}
   .src{font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--info);border:1px solid #C7D6F5;background:#EEF3FD;border-radius:4px;padding:1px 5px;margin-left:6px;white-space:nowrap;}
+  /* week-over-week diff — monochrome, opt-in */
+  #diff-bar{display:flex;align-items:center;gap:12px;padding:12px 0 0;}
+  .difftoggle{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--card);color:var(--ink-soft);border-radius:999px;padding:5px 12px;cursor:pointer;}
+  .difftoggle[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink);}
+  #diff-banner{font-size:12px;color:var(--muted);}
+  #diff-banner b{color:var(--ink-soft);}
+  .diffstrip{display:none;flex-wrap:wrap;gap:6px;padding:8px 20px 8px 22px;background:#FBFCFD;border-bottom:1px solid var(--line-soft);}
+  .diffmode .diffstrip{display:flex;}
+  .dchip{font-size:10.5px;color:var(--muted);background:var(--line-soft);border:1px solid var(--line);border-radius:5px;padding:2px 7px;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .dchip.new{color:var(--ink-soft);font-weight:600;}
+  .diffmode .card.unchanged{opacity:.5;}
   /* todos */
   .todo{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start;padding:6px 0;border-bottom:1px solid var(--line-soft);}
   .todo:last-of-type{border-bottom:none;}
@@ -199,6 +210,7 @@
     </nav>
   </div></header>
   <div class="wrap" id="view-board">
+    <div id="diff-bar" style="display:none"><button id="diff-toggle" class="difftoggle" hidden></button><span id="diff-banner"></span></div>
     <div class="toolbar" id="toolbar"><span class="lbl">Filter</span></div>
     <div id="loading">Connecting to the board&hellip;</div>
     <div id="board"></div>
@@ -238,6 +250,7 @@ const CONTRACT_COLORS={"Certos":"#C77D3A","Paze Marketing":"#3E6FB0","Paze Sales
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
 
 let projects=[], todosByProj={}, curFilter=()=>true;
+let baseline=null; let diffOn=localStorage.getItem("wtw-diff")==="1";
 
 // ---------- feedback ----------
 const toast=document.getElementById("toast"); let tt;
@@ -266,13 +279,15 @@ async function delTodo(id){
 
 // ---------- load + realtime ----------
 async function load(){
-  const [{data:ps,error:e1},{data:ts,error:e2}]=await Promise.all([
+  const [{data:ps,error:e1},{data:ts,error:e2},{data:bh}]=await Promise.all([
     sb.from("projects").select("*").order("sort"),
-    sb.from("todos").select("*").order("sort")
+    sb.from("todos").select("*").order("sort"),
+    sb.from("board_history").select("*").eq("kind","finalized").order("taken_at",{ascending:false}).limit(1)
   ]);
   if(e1||e2){ document.getElementById("loading").textContent="Couldn't load: "+((e1||e2).message); return; }
   projects=ps||[]; todosByProj={};
   (ts||[]).forEach(t=>{ (todosByProj[t.project_id]=todosByProj[t.project_id]||[]).push(t); });
+  baseline=(bh&&bh.length)?bh[0]:null;
   render();
 }
 sb.channel("board")
@@ -286,6 +301,41 @@ function hoursBar(rem,bud){ const r=parseFloat(rem),b=parseFloat(bud);
   if(isNaN(r)||isNaN(b)||b<=0) return {cls:"none",pct:0}; const p=Math.max(4,Math.min(100,Math.round(r/b*100)));
   return {cls:p>=25?"":(p>=10?"amber":"red"),pct:p}; }  // neutral unless actually low
 
+// ---------- week-over-week diff (vs last finalized week) ----------
+function kindLabel(k){ const f=KINDS.find(x=>x[0]===k); return f?f[1]:k; }
+function computeDiff(d){
+  if(!baseline) return {changed:false,isNew:false,burned:0,done:0,html:""};
+  const bp=(baseline.projects||[]).find(x=>x.id===d.id);
+  if(!bp) return {changed:true,isNew:true,burned:0,done:0,html:'<div class="diffstrip"><span class="dchip new">NEW since last week</span></div>'};
+  const chips=[]; let burned=0, done=0;
+  const br=parseFloat(bp.hours_rem), cr=parseFloat(d.hours_rem);
+  if(!isNaN(br)&&!isNaN(cr)&&br!==cr){ burned=Math.round((br-cr)*10)/10;
+    chips.push('<span class="dchip">'+(burned>0?"▾ "+burned+"h":"▴ "+(-burned)+"h")+'</span>'); }
+  if(bp.status_kind!==d.status_kind) chips.push('<span class="dchip">was '+esc(kindLabel(bp.status_kind))+'</span>');
+  const bById={}; (baseline.todos||[]).filter(t=>t.project_id===d.id).forEach(t=>bById[t.id]=t);
+  let added=0; (todosByProj[d.id]||[]).forEach(t=>{ const b=bById[t.id]; if(!b) added++; else if(t.done&&!b.done) done++; });
+  if(done) chips.push('<span class="dchip">✓ '+done+' done</span>');
+  if(added) chips.push('<span class="dchip">+'+added+' task'+(added>1?"s":"")+'</span>');
+  const ba=bp.assigned||[], ca=d.assigned||[];
+  ca.filter(n=>ba.indexOf(n)<0).forEach(n=>chips.push('<span class="dchip">+'+esc(n)+'</span>'));
+  ba.filter(n=>ca.indexOf(n)<0).forEach(n=>chips.push('<span class="dchip">−'+esc(n)+'</span>'));
+  return {changed:chips.length>0, isNew:false, burned:burned>0?burned:0, done,
+    html: chips.length?'<div class="diffstrip">'+chips.join("")+'</div>':""};
+}
+function setupDiff(){
+  const bar=document.getElementById("diff-bar"), btn=document.getElementById("diff-toggle"), banner=document.getElementById("diff-banner");
+  if(!baseline){ bar.style.display="none"; document.getElementById("view-board").classList.remove("diffmode"); return; }
+  bar.style.display="flex"; btn.hidden=false;
+  const when=new Date(baseline.taken_at).toLocaleDateString(undefined,{month:"short",day:"numeric"});
+  btn.textContent=(diffOn?"✓ ":"⟲ ")+"Changes since "+when;
+  btn.setAttribute("aria-pressed",diffOn);
+  document.getElementById("view-board").classList.toggle("diffmode",diffOn);
+  if(!diffOn){ banner.innerHTML=""; return; }
+  let nCh=0,tB=0,tD=0,nN=0;
+  projects.forEach(d=>{ const dd=computeDiff(d); if(dd.isNew)nN++; if(dd.changed)nCh++; tB+=dd.burned; tD+=dd.done; });
+  banner.innerHTML='<b>Since '+when+':</b> '+nCh+' project'+(nCh!==1?"s":"")+' moved · '+(Math.round(tB*10)/10)+'h burned · '+tD+' done'+(nN?' · '+nN+' new':'');
+}
+
 function render(){
   document.getElementById("loading").style.display="none";
   const host=document.getElementById("board");
@@ -296,7 +346,7 @@ function render(){
   // people datalist (union of all assigned)
   const set=new Set(); projects.forEach(p=>(p.assigned||[]).forEach(n=>set.add(n)));
   document.getElementById("people").innerHTML=[...set].map(n=>'<option value="'+esc(n)+'">').join("");
-  stats(); filters(); legend(); applyFilter(curFilter);
+  stats(); filters(); legend(); applyFilter(curFilter); setupDiff();
 }
 
 function cardEl(d){
@@ -327,6 +377,9 @@ function cardEl(d){
   renderAuto(c.querySelector(".autofield"), d.recent_auto);
   renderTodos(c.querySelector(".todos"), d.id);
   renderRoster(c.querySelector(".roster"), d);
+  const dd=computeDiff(d);
+  if(dd.html) c.querySelector(".card-head").insertAdjacentHTML("afterend", dd.html);
+  if(baseline && !dd.changed) c.classList.add("unchanged");
   wire(c, d);
   return c;
 }
@@ -476,6 +529,9 @@ tabsEl.addEventListener("click",e=>{
   document.getElementById("view-board").style.display = v==="board"?"":"none";
   document.getElementById("view-history").style.display = v==="history"?"":"none";
   if(v==="history") loadHistory();
+});
+document.getElementById("diff-toggle").addEventListener("click",()=>{
+  diffOn=!diffOn; localStorage.setItem("wtw-diff",diffOn?"1":"0"); setupDiff();
 });
 
 async function loadHistory(){
