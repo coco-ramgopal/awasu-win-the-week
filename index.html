@@ -503,7 +503,7 @@ const gate=document.getElementById("gate"), signout=document.getElementById("sig
 signout.addEventListener("click",async()=>{ await sb.auth.signOut(); location.reload(); });
 function showGate(){ document.getElementById("loading").style.display="none"; document.getElementById("board").innerHTML=""; gate.style.display="flex"; }
 function enter(){ gate.style.display="none"; signout.style.display=""; load(); }
-const SHARED_EMAIL="team@awasudesign.com";
+const SHARED_EMAIL="start@awasudesign.com";
 document.getElementById("gate-form").addEventListener("submit",async e=>{
   e.preventDefault();
   const pw=document.getElementById("gate-pw").value;
