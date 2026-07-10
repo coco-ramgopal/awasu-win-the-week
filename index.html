@@ -32,6 +32,16 @@
   .stat b{font-family:var(--mono);font-size:22px;font-weight:620;font-variant-numeric:tabular-nums;}
   .stat small{color:#99A1B0;font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;}
   .stat.alert b{color:#FF8A7A;}.stat.warnc b{color:#F4C56B;}
+  /* team & meeting context strip (header) */
+  .ctx{display:flex;gap:34px;align-items:flex-start;flex-wrap:wrap;padding:4px 0 18px;}
+  .ci{display:flex;flex-direction:column;gap:3px;min-width:0;}
+  .ci.grow{flex:1;min-width:220px;}
+  .ci small{color:#99A1B0;font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;}
+  .ci b{font-size:15px;font-weight:600;color:#fff;}
+  .ci .ooo{font-size:13.5px;color:#E4E7EC;line-height:1.4;border:1px solid transparent;border-radius:6px;padding:3px 7px;margin:-3px -7px;transition:background .1s;}
+  .ci .ooo:hover{background:rgba(255,255,255,.06);}
+  .ci .ooo:focus{outline:none;background:rgba(255,255,255,.1);border-color:var(--brand-bright);}
+  .ci .ooo:empty::before{content:"click to add who's out…";color:#6B7280;font-style:italic;}
   .toolbar{display:flex;align-items:center;gap:8px;padding:16px 0;flex-wrap:wrap;}
   .toolbar .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted-2);}
   .chip{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--card);color:var(--ink-soft);padding:6px 13px;border-radius:999px;cursor:pointer;font-weight:500;}
@@ -250,7 +260,7 @@ const CONTRACT_COLORS={"Certos":"#C77D3A","Paze Marketing":"#3E6FB0","Paze Sales
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
 
 let projects=[], todosByProj={}, curFilter=()=>true;
-let baseline=null; let diffOn=localStorage.getItem("wtw-diff")==="1";
+let baseline=null; let diffOn=localStorage.getItem("wtw-diff")==="1"; let settings={ooo:""};
 
 // ---------- feedback ----------
 const toast=document.getElementById("toast"); let tt;
@@ -279,15 +289,17 @@ async function delTodo(id){
 
 // ---------- load + realtime ----------
 async function load(){
-  const [{data:ps,error:e1},{data:ts,error:e2},{data:bh}]=await Promise.all([
+  const [{data:ps,error:e1},{data:ts,error:e2},{data:bh},{data:bs}]=await Promise.all([
     sb.from("projects").select("*").order("sort"),
     sb.from("todos").select("*").order("sort"),
-    sb.from("board_history").select("*").eq("kind","finalized").order("taken_at",{ascending:false}).limit(1)
+    sb.from("board_history").select("*").eq("kind","finalized").order("taken_at",{ascending:false}).limit(1),
+    sb.from("board_settings").select("*").eq("id",1).maybeSingle()
   ]);
   if(e1||e2){ document.getElementById("loading").textContent="Couldn't load: "+((e1||e2).message); return; }
   projects=ps||[]; todosByProj={};
   (ts||[]).forEach(t=>{ (todosByProj[t.project_id]=todosByProj[t.project_id]||[]).push(t); });
   baseline=(bh&&bh.length)?bh[0]:null;
+  settings=bs||{ooo:""};
   render();
 }
 sb.channel("board")
@@ -346,7 +358,7 @@ function render(){
   // people datalist (union of all assigned)
   const set=new Set(); projects.forEach(p=>(p.assigned||[]).forEach(n=>set.add(n)));
   document.getElementById("people").innerHTML=[...set].map(n=>'<option value="'+esc(n)+'">').join("");
-  stats(); filters(); legend(); applyFilter(curFilter); setupDiff();
+  contextStrip(); filters(); legend(); applyFilter(curFilter); setupDiff();
 }
 
 function cardEl(d){
@@ -498,7 +510,25 @@ function stats(){
     {b:projects.filter(isQuiet).length,s:"quiet / dormant"}];
   document.getElementById("stats").innerHTML=s.map(x=>'<div class="stat '+(x.c||"")+'"><b>'+x.b+'</b><small>'+x.s+'</small></div>').join("");
 }
-function refreshStats(){ stats(); filters(); }
+function contextStrip(){
+  const today=new Date().toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+  const lastFin=baseline?new Date(baseline.taken_at).toLocaleDateString(undefined,{month:"short",day:"numeric"}):"—";
+  const ooo=(settings&&settings.ooo)||"";
+  document.getElementById("stats").innerHTML=
+    '<div class="ctx">'
+     +'<div class="ci"><small>Today</small><b>'+today+'</b></div>'
+     +'<div class="ci grow"><small>Out this week</small><span class="ooo" contenteditable="true">'+esc(ooo)+'</span></div>'
+     +'<div class="ci"><small>Last finalized</small><b>'+lastFin+'</b></div>'
+    +'</div>';
+  const el=document.querySelector("#stats .ooo");
+  el.addEventListener("blur",async()=>{
+    const v=el.innerText.trim(); if(v===((settings&&settings.ooo)||"")) return;
+    settings.ooo=v;
+    const {error}=await sb.from("board_settings").update({ooo:v,updated_at:new Date().toISOString()}).eq("id",1);
+    if(error){ flash("Save failed: "+error.message,true); } else { flash("Saved"); }
+  });
+}
+function refreshStats(){ filters(); }
 function filters(){
   const defs=[["all","All",()=>true],["flagged","Flagged",hasRealFlag],
     ["quiet","Quiet / dormant",isQuiet],["ontrack","On track",d=>d.status_kind==="ontrack"]];
