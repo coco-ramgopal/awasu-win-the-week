@@ -44,9 +44,7 @@
   .grid{display:flex;flex-direction:column;gap:14px;}
   .card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;}
   .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--stripe,var(--line));}
-  /* status color = attention only: neutral normally, amber/red when it matters */
-  .card[data-kind="inactive"],.card[data-kind="stale"]{--stripe:var(--warn);}
-  .card[data-kind="blocked"],.card[data-kind="atrisk"]{--stripe:var(--crit);}
+  /* left stripe = contract grouping (set inline per card); status attention lives in the pill */
   .card-head{display:grid;grid-template-columns:1fr auto;gap:16px 20px;padding:16px 20px 14px 22px;align-items:start;border-bottom:1px solid var(--line-soft);}
   .proj{font-size:16.5px;font-weight:700;letter-spacing:-.01em;margin:0 0 5px;}
   .meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
@@ -235,6 +233,8 @@ const sb = createClient(SUPA_URL, SUPA_KEY);
 
 const KINDS=[["ontrack","On track"],["scoping","Active · scoping"],["active","Active · light"],
   ["inactive","Inactive"],["stale","Stale"],["dormant","Dormant"],["deferred","Unmapped / low-touch"],["bd","BD"]];
+// left-edge stripe groups cards by contract (one systematic dimension of color)
+const CONTRACT_COLORS={"Certos":"#C77D3A","Paze Marketing":"#3E6FB0","Paze Sales":"#5AA0A0","EWS Corp":"#7E63B8","Zelle":"#4C9E7A","Deksia":"#9A8B6A"};
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
 
 let projects=[], todosByProj={}, curFilter=()=>true;
@@ -302,6 +302,7 @@ function render(){
 function cardEl(d){
   const c=document.createElement("article");
   c.className="card"; c.dataset.kind=d.status_kind||"deferred"; c.dataset.id=d.id;
+  c.style.setProperty("--stripe", CONTRACT_COLORS[d.contract] || "var(--line)");
   const kindOpts=KINDS.map(k=>'<option value="'+k[0]+'"'+(k[0]===d.status_kind?" selected":"")+'>'+esc(k[1])+'</option>').join("");
   const hb=hoursBar(d.hours_rem,d.hours_budget);
   c.innerHTML=
@@ -440,14 +441,13 @@ const isQuiet=d=>["inactive","stale","dormant"].includes(d.status_kind);
 const openTodos=d=>(todosByProj[d.id]||[]).filter(t=>!t.done);
 const needOwner=d=>openTodos(d).some(t=>!String(t.assignee||"").trim());
 function stats(){
-  const unassignedTasks=projects.reduce((n,d)=>n+openTodos(d).filter(t=>!String(t.assignee||"").trim()).length,0);
   const s=[{b:projects.length,s:"projects"},{b:projects.filter(hasRealFlag).length,s:"flagged",c:"alert"},
-    {b:unassignedTasks,s:"tasks need an owner",c:"warnc"},{b:projects.filter(isQuiet).length,s:"quiet / dormant"}];
+    {b:projects.filter(isQuiet).length,s:"quiet / dormant"}];
   document.getElementById("stats").innerHTML=s.map(x=>'<div class="stat '+(x.c||"")+'"><b>'+x.b+'</b><small>'+x.s+'</small></div>').join("");
 }
 function refreshStats(){ stats(); filters(); }
 function filters(){
-  const defs=[["all","All",()=>true],["flagged","Flagged",hasRealFlag],["owner","Needs task owner",needOwner],
+  const defs=[["all","All",()=>true],["flagged","Flagged",hasRealFlag],
     ["quiet","Quiet / dormant",isQuiet],["ontrack","On track",d=>d.status_kind==="ontrack"]];
   const tb=document.getElementById("toolbar"); tb.querySelectorAll(".chip").forEach(x=>x.remove());
   defs.forEach(f=>{ const b=document.createElement("button"); b.className="chip"; b.setAttribute("aria-pressed",curFilter===f[2]||(f[0]==="all"&&curFilter.all));
@@ -461,9 +461,10 @@ function applyFilter(test){
     s.style.display=any?"":"none"; if(g)g.style.display=any?"":"none"; });
 }
 function legend(){
-  const L=[["#AEB4BF","On track / normal"],["var(--warn)","Needs attention (inactive / stale)"],
-    ["var(--crit)","Blocked / at risk"]];
-  document.getElementById("legend").innerHTML=L.map(x=>'<span class="li"><span class="sw" style="background:'+x[0]+'"></span>'+x[1]+'</span>').join("");
+  const seen=[]; projects.forEach(p=>{ if(p.contract && seen.indexOf(p.contract)<0) seen.push(p.contract); });
+  const items=seen.map(c=>'<span class="li"><span class="sw" style="background:'+(CONTRACT_COLORS[c]||"var(--line)")+'"></span>'+esc(c)+'</span>');
+  items.push('<span class="li" style="margin-left:8px;color:var(--muted-2)">Left edge = contract</span>');
+  document.getElementById("legend").innerHTML=items.join("");
 }
 
 // ---------- tabs + history ----------
