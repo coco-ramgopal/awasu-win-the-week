@@ -52,6 +52,11 @@
   .meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .client{font-size:11.5px;color:var(--muted);}
   .dot{width:3px;height:3px;border-radius:50%;background:var(--muted-2);}
+  .hd-main{min-width:0;}
+  .owners{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px;}
+  .owners-k{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted-2);font-weight:700;}
+  .hours .figs .bud{color:var(--muted-2);}
+  .hnote{font-size:11px;color:var(--muted-2);text-align:right;margin-top:2px;}
   select.kind{font:inherit;font-size:11px;font-weight:650;border:1px solid transparent;border-radius:999px;padding:3px 8px;cursor:pointer;-webkit-appearance:none;appearance:none;}
   .kind[data-kind="ontrack"]{color:var(--good);background:var(--good-bg);}.kind[data-kind="scoping"],.kind[data-kind="active"]{color:var(--info);background:var(--info-bg);}
   .kind[data-kind="inactive"],.kind[data-kind="stale"]{color:var(--warn);background:var(--warn-bg);}
@@ -294,24 +299,22 @@ function cardEl(d){
   const kindOpts=KINDS.map(k=>'<option value="'+k[0]+'"'+(k[0]===d.status_kind?" selected":"")+'>'+esc(k[1])+'</option>').join("");
   const hb=hoursBar(d.hours_rem,d.hours_budget);
   c.innerHTML=
-    '<div class="card-head"><div style="min-width:0">'
-      +'<p class="proj ed" contenteditable="true" data-col="project">'+esc(d.project)+'</p>'
-      +'<div class="meta"><span class="client ed" contenteditable="true" data-col="client_type">'+esc(d.client_type)+'</span>'
-        +'<span class="dot"></span><select class="kind" data-col="status_kind" data-kind="'+(d.status_kind||"")+'" title="Status colour">'+kindOpts+'</select>'
-        +'<span class="client ed" contenteditable="true" data-col="status" style="font-weight:600">'+esc(d.status)+'</span></div></div>'
-      +'<div class="hours"><div class="figs">'
-        +'<input class="hin rem" data-col="hours_rem" value="'+esc(d.hours_rem)+'" placeholder="—" inputmode="decimal">'
-        +'<span>/</span><input class="hin bud" data-col="hours_budget" value="'+esc(d.hours_budget)+'" inputmode="decimal"></div>'
-        +'<div class="client ed" contenteditable="true" data-col="hours_note" style="text-align:right">'+esc(d.hours_note)+'</div>'
+    '<div class="card-head"><div class="hd-main">'
+      +'<p class="proj">'+esc(d.project)+'</p>'
+      +'<div class="meta"><span class="client">'+esc(d.client_type)+'</span>'
+        +'<span class="dot"></span><select class="kind" data-col="status_kind" data-kind="'+(d.status_kind||"")+'" title="Status">'+kindOpts+'</select></div>'
+      +'<div class="owners"><span class="owners-k">Owners</span><div class="roster"></div></div></div>'
+      +'<div class="hours"><div class="figs"><span class="rem">'+(d.hours_rem==null||d.hours_rem===""?"—":esc(d.hours_rem))+'</span>'
+        +'<span>/</span><span class="bud">'+(d.hours_budget==null||d.hours_budget===""?"—":esc(d.hours_budget))+'</span></div>'
+        +'<div class="hnote">'+esc(d.hours_note)+'</div>'
         +'<div class="bar '+hb.cls+'"><i style="width:'+hb.pct+'%"></i></div></div></div>'
     +'<div class="flags" data-col="flags"></div>'
     +'<div class="body">'
       +'<div class="col"><h4>Recent activity</h4><div class="listfield" data-col="recent"></div></div>'
       +'<div class="col q"><h4>Open questions</h4><div class="listfield" data-col="questions"></div></div>'
-      +'<div class="col todos-col"><h4>Next steps &amp; owners</h4><div class="todos"></div><button class="add-todo">+ add task</button></div>'
+      +'<div class="col todos-col"><h4>Next steps</h4><div class="todos"></div><button class="add-todo">+ add task</button></div>'
     +'</div>'
-    +'<div class="foot"><div><span class="k">Assigned — who\'s on this</span><div class="roster"></div></div>'
-      +'<div class="synced">'+esc(d.last_synced)+'</div></div>';
+    +'<div class="foot"><span></span><div class="synced">Last synced — '+esc(d.last_synced)+'</div></div>';
   renderFlags(c.querySelector(".flags"), d.flags);
   c.querySelectorAll(".listfield").forEach(f=>renderList(f, d[f.dataset.col]));
   renderTodos(c.querySelector(".todos"), d.id);
